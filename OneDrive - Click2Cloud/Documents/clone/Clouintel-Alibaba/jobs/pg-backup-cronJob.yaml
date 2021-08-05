@@ -1,0 +1,49 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: cloudintel
+  labels:
+    app: postgres-backup
+spec:
+  schedule: "30 18 * * *"
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                - matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                    - backend
+          restartPolicy: Never
+          containers:
+          - name: pgsql-backup
+            image: registry.thecloudsbrain.com/click2cloud/postgres-back-up:latest
+            imagePullPolicy: Always
+            envFrom:
+            - secretRef:
+                name: db-backup-secrets
+            env:
+            - name: ENVIRONMENT
+              value: "prod"
+            volumeMounts:
+            - mountPath: "/pg_backup"
+              name: backup-volume
+          initContainers:
+          - name: wait-for-db
+            image: registry.thecloudsbrain.com/click2cloud/wait-for-db:latest
+            envFrom:
+            - secretRef:
+                name: db-conn-secrets
+          imagePullSecrets:
+          - name: c2c-regcred
+          volumes:
+            - name: backup-volume
+              persistentVolumeClaim:
+                claimName: pg-backup-pvc-cloudintel

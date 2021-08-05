@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloudintel-app
+  namespace: cloudintel
+  labels:
+    app: cloudintel-app
+spec:
+  type: NodePort
+  ports:
+  - port: 8080
+    targetPort: app
+    nodePort: 30282
+  selector:
+    app: cloudintel-app
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+  namespace: cloudintel
+  labels:
+    app: cloudintel-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloudintel-app
+  template:
+    metadata:
+      labels:
+        app: cloudintel-app
+      name: app
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - backend
+      containers:
+      - name: app
+        image: registry.thecloudsbrain.com/click2cloud/cloudintelapp:prod
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /
+            port: app
+          initialDelaySeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /
+            port: app
+          initialDelaySeconds: 30
+        ports:
+        - containerPort: 80
+          protocol: TCP
+          name: app    
+        envFrom:
+        - configMapRef:
+            name: cloudintel-app-config
+        - secretRef:
+            name: db-conn-secrets
+        resources:
+          requests:
+            memory: "2Gi"
+      initContainers:
+      - name: wait-for-db
+        image: registry.thecloudsbrain.com/click2cloud/wait-for-db:latest
+        envFrom:
+        - secretRef:
+            name: db-conn-secrets
+      imagePullSecrets:
+      - name: c2c-regcred
+      terminationGracePeriodSeconds: 5

@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloud-intel-python-api
+  namespace: cloudintel
+  labels:
+    app: cloudintel-node
+spec:
+  type: NodePort
+  ports:
+  - port: 8000
+    targetPort: api
+    nodePort: 30203
+  selector:
+    app: cloud-intel-python-api
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: cloudintel
+  labels:
+    app: cloud-intel-python-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloud-intel-python-api
+  template:
+    metadata:
+      labels:
+        app: cloud-intel-python-api
+      name: api
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - backend
+      containers:
+      - name: api
+        image: registry.thecloudsbrain.com/click2cloud/cloud_intel_python_api:prod 
+        imagePullPolicy: Always
+        # livenessProbe:
+        #   httpGet:
+        #     path: /
+        #     port: node
+        #   initialDelaySeconds: 30
+        # readinessProbe:
+        #   httpGet:
+        #     path: /
+        #     port: node
+        #   initialDelaySeconds: 30
+        ports:
+        - containerPort: 8000
+          protocol: TCP
+          name: api    
+        envFrom:
+        - configMapRef:
+            name: cloudintel-node-config
+        - secretRef:
+            name: db-conn-secrets
+        resources:
+          requests:
+            memory: "2Gi"
+      initContainers:
+      - name: wait-for-db
+        image: registry.thecloudsbrain.com/click2cloud/wait-for-db:latest
+        envFrom:
+        - secretRef:
+            name: db-conn-secrets
+      imagePullSecrets:
+      - name: c2c-regcred
+      terminationGracePeriodSeconds: 5

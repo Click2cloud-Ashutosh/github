@@ -1,0 +1,12 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: alicloud-nas
+mountOptions:
+- nolock,tcp,noresvport
+- vers=3
+parameters:
+  server: "2555174af23-att76.ap-northeast-1.nas.aliyuncs.com:/mnt"
+  driver: flexvolume
+provisioner: nasplugin.csi.alibabacloud.com
+reclaimPolicy: Delete

@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloudintel-db
+  namespace: cloudintel
+  labels:
+    app: postgres
+spec:
+  type: NodePort
+  ports:
+  - protocol: TCP
+    port: 5432
+    targetPort: postgres
+    nodePort: 30236
+  selector:
+    app: postgres
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: postgres
+  name: cloudintel-db
+  namespace: cloudintel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - backend
+      volumes:
+        - name: cloudintel-pgdb-volume
+          persistentVolumeClaim:
+            claimName: cloudintel-db-claim
+        - name: cloudintel-db-configs
+          configMap:
+            name: cloudintel-db-configs
+      containers:
+      - image: registry.thecloudsbrain.com/click2cloud/postgres:10
+        name: postgres
+        ports:
+        - containerPort: 5432
+          name: postgres
+        args: ["-c", "config_file=/etc/postgresql/postgresql.conf"]
+        livenessProbe:
+            timeoutSeconds: 1
+            initialDelaySeconds: 120
+            tcpSocket:
+              port: postgres
+        readinessProbe:
+            timeoutSeconds: 2
+            initialDelaySeconds: 60
+            exec:
+              command:
+              - "/bin/sh"
+              - "-i"
+              - "-c"
+              - psql -U ${POSTGRES_USER} -q -d ${POSTGRES_DB} -c 'SELECT 1'
+        volumeMounts:
+        - name: cloudintel-pgdb-volume
+          mountPath: "/var/lib/postgresql/data"
+        - name: cloudintel-db-configs
+          mountPath: "/etc/postgresql/postgresql.conf"
+          subPath: postgresql.conf
+        envFrom:
+        - secretRef:
+            name: db-secrets
+      imagePullSecrets:
+      - name: c2c-regcred
